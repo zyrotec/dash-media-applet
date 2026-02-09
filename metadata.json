@@ -1,0 +1,9 @@
+{
+  "uuid": "dash-media-applet@zyrotec",
+  "name": "Zyrotec Dash Media Applet",
+  "description": "A media player applet for the Gnome Dash",
+  "shell-version": [
+    "49"
+  ],
+  "version": 1
+}
