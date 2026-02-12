@@ -594,6 +594,10 @@ export class MprisService extends Signals.EventEmitter {
         return this._mprisActivePlayer.getMprisBusName();
     }
 
+    public getActiveMprisPlayer(): MprisPlayerService | null {
+        return this._mprisActivePlayer;
+    }
+
     public isMprisConnected(): boolean {
         return this._mprisActivePlayer !== null;
     }

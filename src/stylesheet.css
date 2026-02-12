@@ -1,0 +1,28 @@
+.zt-media-dash-box {
+  background: #000;
+  padding: 6px;
+  border-radius: 16px;
+  margin: 0px 0px 4px 0px;
+  overflow: hidden;
+}
+
+.zt-media-art-box {
+  background-image: url("file:///home/louis/Pictures/Screenshots/Screenshot From 2026-01-13 22-12-06.png");
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.zt-media-title-label {
+  font-size: 12px;
+  font-weight: bold;
+  padding: 2px 4px 2px 6px;
+}
+
+.zt-media-artist-label {
+  font-size: 12px;
+  font-weight: normal;
+  padding: 2px 4px 2px 6px;
+}
