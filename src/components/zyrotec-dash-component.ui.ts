@@ -1,22 +1,15 @@
 import St from "gi://St";
 import Clutter from "gi://Clutter";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
-import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
-import { MprisService } from "../services/mpris/mpris-service.js";
-import { MPRIS_CHANGED_SIGNALS } from "../enums/mpris/mpris-changed-signals.enum.js";
-import { MprisMetadata } from "../types/mpris/mpris-metadata.type.js";
+import { ZyrotecMarqueeLabel } from "./zyrotec-marquee-label.ui.js";
 
 export class ZyrotecDashComponent {
     private _mediaDashBox!: St.BoxLayout;
     private _mediaArtBox!: St.BoxLayout;
     private _mediaLabelBox!: St.BoxLayout;
-    private _mediaTitleLabel!: St.Label;
-    private _mediaArtistLabel!: St.Label;
-
-    private _mediaArtUrl?: string;
-    private _mediaTitle?: string;
-    private _mediaArtist?: string;
+    private _mediaTitleLabel!: ZyrotecMarqueeLabel;
+    private _mediaArtistLabel!: ZyrotecMarqueeLabel;
 
     constructor() {
         this._init();
@@ -31,7 +24,8 @@ export class ZyrotecDashComponent {
             styleClass: "zt-media-dash-box",
             yExpand: true,
             yAlign: Clutter.ActorAlign.CENTER,
-            orientation: Clutter.Orientation.HORIZONTAL
+            orientation: Clutter.Orientation.HORIZONTAL,
+            width: 180
         });
 
         this._mediaArtBox = new St.BoxLayout({
@@ -44,23 +38,36 @@ export class ZyrotecDashComponent {
         this._mediaLabelBox = new St.BoxLayout({
             y_align: Clutter.ActorAlign.CENTER,
             orientation: Clutter.Orientation.VERTICAL,
-            styleClass: "zt-media-label-container"
+            styleClass: "zt-media-label-container",
+            y_expand: false
         });
 
-        this._mediaTitleLabel = new St.Label({
-            text: "",
+        this._mediaTitleLabel = new ZyrotecMarqueeLabel({
             style_class: 'zt-media-title-label',
             yAlign: Clutter.ActorAlign.CENTER
         });
 
-        this._mediaArtistLabel = new St.Label({
-            text: "",
+        this._mediaArtistLabel = new ZyrotecMarqueeLabel({
             style_class: 'zt-media-artist-label',
             yAlign: Clutter.ActorAlign.CENTER
         });
 
-        this._mediaLabelBox.insert_child_at_index(this._mediaTitleLabel, 0);
-        this._mediaLabelBox.insert_child_at_index(this._mediaArtistLabel, 1);
+        const labelWidth = 180 - (12 + (this._getDashIconSize() - (this._mediaDashBox.get_theme_node().get_padding(St.Side.TOP) * 2)));
+
+        this._mediaTitleLabel.setText("");
+        this._mediaArtistLabel.setText("");
+        this._mediaTitleLabel.setWidth(labelWidth);
+        this._mediaArtistLabel.setWidth(labelWidth);
+        this._mediaTitleLabel.setMarqueeScrollSpeed(40);
+        this._mediaArtistLabel.setMarqueeScrollSpeed(40);
+        this._mediaTitleLabel.setLabelSpacerGap(16);
+        this._mediaArtistLabel.setLabelSpacerGap(16);
+        this._mediaTitleLabel.setMarqueeAnimationDelay(60);
+        this._mediaArtistLabel.setMarqueeAnimationDelay(60);
+
+        this._mediaLabelBox.insert_child_at_index(this._mediaTitleLabel.getComponent(), 0);
+        this._mediaLabelBox.insert_child_at_index(this._mediaArtistLabel.getComponent(), 1);
+        this._mediaLabelBox.set_width(labelWidth);
 
         this._mediaDashBox.insert_child_at_index(this._mediaArtBox, 0);
         this._mediaDashBox.insert_child_at_index(this._mediaLabelBox, 1);
@@ -84,11 +91,11 @@ export class ZyrotecDashComponent {
     }
 
     public setMediaTitle(value: string | null): void {
-        this._mediaTitleLabel.set_text(value ?? "");
+        this._mediaTitleLabel.setText(value ?? "");
     }
 
     public setMediaArtist(value: string | null): void {
-        this._mediaArtistLabel.set_text(value ?? "");
+        this._mediaArtistLabel.setText(value ?? "");
     }
 
     public getComponent(): St.BoxLayout {

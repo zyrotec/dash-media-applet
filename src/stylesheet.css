@@ -15,14 +15,21 @@
   overflow: hidden;
 }
 
+.zt-media-label-container {
+  overflow: hidden;
+  padding: 3px 4px 2px 6px;
+}
+
 .zt-media-title-label {
   font-size: 12px;
   font-weight: bold;
-  padding: 2px 4px 2px 6px;
+  padding: 0;
+  margin-bottom: 1px;
 }
 
 .zt-media-artist-label {
   font-size: 12px;
   font-weight: normal;
-  padding: 2px 4px 2px 6px;
+  padding: 0;
+  margin-top: 1px;
 }
