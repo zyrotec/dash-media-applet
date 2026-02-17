@@ -1,0 +1,1 @@
+export type CavaCallback = (values: number[]) => void;

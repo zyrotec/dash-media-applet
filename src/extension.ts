@@ -1,16 +1,20 @@
-import St from "gi://St";
 import Clutter from "gi://Clutter";
+import GLib from "gi://GLib";
+import St from "gi://St";
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import { ZyrotecDashComponent } from './components/zyrotec-dash-component.ui.js';
 import { MPRIS_CHANGED_SIGNALS } from './enums/mpris/mpris-changed-signals.enum.js';
+import { CavaService } from "./services/cava/cava-service.js";
 import { MprisService } from './services/mpris/mpris-service.js';
 import { MprisMetadata } from './types/mpris/mpris-metadata.type.js';
 
 export default class MyExtension extends Extension {
   private _mprisService?: MprisService;
+  private _cavaService?: CavaService;
   private _zyrotecDashComponent?: ZyrotecDashComponent;
+
   private _mediaDashTriggerButton!: St.Button;
   private _mediaPopupMenu!: PopupMenu.PopupMenu;
   private _menuManager?: PopupMenu.PopupMenuManager;
@@ -91,7 +95,10 @@ export default class MyExtension extends Extension {
 
   enable() {
     this._mprisService = new MprisService();
-    this._zyrotecDashComponent = new ZyrotecDashComponent();
+    this._cavaService = new CavaService(this._setCavaConfig());
+    this._cavaService.cavaStart();
+
+    this._zyrotecDashComponent = new ZyrotecDashComponent(this._cavaService);
 
     this._mediaMenuItem = new PopupMenu.PopupBaseMenuItem({
       reactive: false,
@@ -157,5 +164,49 @@ export default class MyExtension extends Extension {
     if (this._mediaPopupMenu) {
       this._menuManager?.removeMenu(this._mediaPopupMenu);
     }
+
+    this._cavaService?.cavaStop();
+  }
+
+  private _getMonitorSource(): string {
+    try {
+      const [ok, stdout] = GLib.spawn_command_line_sync(
+        "pactl get-default-sink"
+      );
+
+      if (!ok || !stdout)
+        return "auto";
+
+      const sink = new TextDecoder().decode(stdout).trim();
+
+      return `${sink}.monitor`;
+    } catch {
+      return "auto";
+    }
+  }
+
+  private _setCavaConfig(): string {
+    const path = `${GLib.get_tmp_dir()}/gnome-ext-cava.conf`;
+
+    const content = `
+            [general]
+            bars = 128
+            framerate = 60
+            autosens = 1
+
+            [input]
+            method = pulse
+            source = ${this._getMonitorSource()}
+
+            [output]
+            method = raw
+            raw_target = /dev/stdout
+            data_format = ascii
+            ascii_max_range = 100
+        `;
+
+    GLib.file_set_contents(path, content);
+
+    return path;
   }
 }
