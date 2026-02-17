@@ -3,15 +3,20 @@ import Clutter from "gi://Clutter";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 
 import { ZyrotecMarqueeLabel } from "./zyrotec-marquee-label.ui.js";
+import { ZyrotecAudioVisualizer } from "./zyrotec-audio-visualizer.ui.js";
+import { CavaService } from "../services/cava/cava-service.js";
 
 export class ZyrotecDashComponent {
     private _mediaDashBox!: St.BoxLayout;
     private _mediaArtBox!: St.BoxLayout;
     private _mediaLabelBox!: St.BoxLayout;
+    private _mediaVisualizerBox!: St.BoxLayout;
+    private _mediaVisualizerWrapper!: St.Bin;
     private _mediaTitleLabel!: ZyrotecMarqueeLabel;
     private _mediaArtistLabel!: ZyrotecMarqueeLabel;
+    private _mediaAudioVisualizer?: ZyrotecAudioVisualizer;
 
-    constructor() {
+    constructor(private _cavaService: CavaService) {
         this._init();
     }
 
@@ -42,6 +47,13 @@ export class ZyrotecDashComponent {
             y_expand: false
         });
 
+        this._mediaVisualizerBox = new St.BoxLayout({
+            height: 16,
+            width: 20,
+            style_class: 'zt-media-visualizer-container',
+            yAlign: Clutter.ActorAlign.CENTER,
+        });
+
         this._mediaTitleLabel = new ZyrotecMarqueeLabel({
             style_class: 'zt-media-title-label',
             yAlign: Clutter.ActorAlign.CENTER
@@ -52,7 +64,20 @@ export class ZyrotecDashComponent {
             yAlign: Clutter.ActorAlign.CENTER
         });
 
-        const labelWidth = 180 - (12 + (this._getDashIconSize() - (this._mediaDashBox.get_theme_node().get_padding(St.Side.TOP) * 2)));
+        this._mediaVisualizerWrapper = new St.Bin({
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+            x_expand: true,
+            y_expand: true,
+        });
+
+        this._mediaAudioVisualizer = new ZyrotecAudioVisualizer(this._cavaService, {
+            reactive: false,
+            x_expand: false,
+            y_expand: false,
+        });
+
+        const labelWidth = 180 - (38 + (this._getDashIconSize() - (this._mediaDashBox.get_theme_node().get_padding(St.Side.TOP) * 2)));
 
         this._mediaTitleLabel.setText("");
         this._mediaArtistLabel.setText("");
@@ -69,8 +94,12 @@ export class ZyrotecDashComponent {
         this._mediaLabelBox.insert_child_at_index(this._mediaArtistLabel.getComponent(), 1);
         this._mediaLabelBox.set_width(labelWidth);
 
+        this._mediaVisualizerWrapper.add_child(this._mediaAudioVisualizer.getComponent());
+        this._mediaVisualizerBox.add_child(this._mediaVisualizerWrapper);
+
         this._mediaDashBox.insert_child_at_index(this._mediaArtBox, 0);
         this._mediaDashBox.insert_child_at_index(this._mediaLabelBox, 1);
+        this._mediaDashBox.insert_child_at_index(this._mediaVisualizerBox, 2);
     }
 
     private _getDashIconSize(): number {
