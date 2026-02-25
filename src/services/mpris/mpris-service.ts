@@ -18,6 +18,9 @@ export class MprisService extends Signals.EventEmitter {
     private _mprisActivePlayer: MprisPlayerService | null = null;
     private _mprisNameWatcherId: number | null = null;
 
+    private _mprisPositionTimerId: number | null = null;
+    private _mprisPositionPollInterval = 500;
+
     constructor() {
         super();
         this._init();
@@ -127,13 +130,12 @@ export class MprisService extends Signals.EventEmitter {
             return;
         }
 
-        console.log(`Player removed: ${playerName}`);
-
         mprisPlayer.disconnect();
 
         this._mprisPlayers.delete(playerName);
 
         if (this._mprisActivePlayer === mprisPlayer) {
+            this._stopPositionPolling();
             this._mprisActivePlayer = null;
             this._switchToMostRecentMprisPlayer();
         }
@@ -299,10 +301,18 @@ export class MprisService extends Signals.EventEmitter {
                 const metadata = this._parseMprisMetadata(<MprisRawMetadata>changedProperties[MPRIS_CHANGED_PROPERTIES.metadata].deepUnpack());
 
                 this.emit(MPRIS_CHANGED_SIGNALS.metadataChanged, metadata);
+
+                this._fetchPositionAsync();
             }
 
             if (MPRIS_CHANGED_PROPERTIES.playbackStatus in changedProperties) {
                 const status = <MprisPlaybackStatus>changedProperties[MPRIS_CHANGED_PROPERTIES.playbackStatus].unpack();
+
+                if (status === MPRIS_PLAYBACK_STATUS.playing) {
+                    this._startPositionPolling();
+                } else {
+                    this._stopPositionPolling();
+                }
 
                 this.emit(MPRIS_CHANGED_SIGNALS.playbackStatusChanged, status);
             }
@@ -327,6 +337,8 @@ export class MprisService extends Signals.EventEmitter {
         if (metadata) {
             this.emit(MPRIS_CHANGED_SIGNALS.metadataChanged, metadata);
         }
+
+        this._fetchPositionAsync();
         this.emit(MPRIS_CHANGED_SIGNALS.playbackStatusChanged, this.getMprisPlaybackStatus());
         this.emit(MPRIS_CHANGED_SIGNALS.shuffleChanged, this.getMprisShuffle());
         this.emit(MPRIS_CHANGED_SIGNALS.loopStatusChanged, this.getMprisLoopStatus());
@@ -341,9 +353,65 @@ export class MprisService extends Signals.EventEmitter {
             length: <number>mprisRawMetadata[MPRIS_METADATA.length]?.unpack() ?? null,
             albumArtist: <string[]>mprisRawMetadata[MPRIS_METADATA.albumArtist]?.unpack() ?? null,
             trackNumber: <number>mprisRawMetadata[MPRIS_METADATA.trackNumber]?.unpack() ?? null,
+            trackId: <string>mprisRawMetadata[MPRIS_METADATA.trackId]?.unpack() ?? null,
             discNumber: <number>mprisRawMetadata[MPRIS_METADATA.discNumber]?.unpack() ?? null,
             url: <string>mprisRawMetadata[MPRIS_METADATA.url]?.unpack() ?? null
         };
+    }
+
+    private _fetchPositionAsync(): void {
+        const proxy = this._mprisActivePlayer?.getMprisPlayerProxy();
+        if (!proxy) return;
+
+        Gio.DBus.session.call(
+            this._mprisActivePlayer!.getMprisBusName(),
+            Environment.MPRIS_PATH,
+            Environment.ORG_FREEDESKTOP_DBUS_PROPERTIES,
+            'Get',
+            GLib.Variant.new('(ss)', [
+                Environment.MPRIS_PLAYER_IFACE,
+                'Position'
+            ]),
+            GLib.VariantType.new('(v)'),
+            Gio.DBusCallFlags.NONE,
+            -1,
+            null,
+            (connection, result) => {
+                try {
+                    const reply = connection?.call_finish(result);
+                    if (!reply) return;
+
+                    const [variant] = reply.deepUnpack() as [GLib.Variant];
+                    const position = variant.unpack() as number;
+
+                    if (Number.isFinite(position) && position >= 0) {
+                        this.emit(MPRIS_CHANGED_SIGNALS.positionChanged, position);
+                    }
+                } catch (e) { }
+            }
+        );
+    }
+
+    private _startPositionPolling(): void {
+        if (this._mprisPositionTimerId !== null)
+            return;
+
+        this._mprisPositionTimerId = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT,
+            this._mprisPositionPollInterval,
+            () => {
+                this._fetchPositionAsync();
+                return GLib.SOURCE_CONTINUE;
+            }
+        );
+    }
+
+    private _stopPositionPolling(): void {
+        if (this._mprisPositionTimerId === null)
+            return;
+
+        GLib.source_remove(this._mprisPositionTimerId);
+        this._mprisPositionTimerId = null;
     }
 
     //Property Control Methods
@@ -455,7 +523,7 @@ export class MprisService extends Signals.EventEmitter {
             return;
         }
 
-        proxy.PlayRemote();
+        proxy.call('Play', null, Gio.DBusCallFlags.NONE, -1, null, null);
     }
 
     public pause(): void {
@@ -466,7 +534,7 @@ export class MprisService extends Signals.EventEmitter {
             return;
         }
 
-        proxy.PauseRemote();
+        proxy.call('Pause', null, Gio.DBusCallFlags.NONE, -1, null, null);
     }
 
     public playPause(): void {
@@ -477,7 +545,7 @@ export class MprisService extends Signals.EventEmitter {
             return;
         }
 
-        proxy.PlayPauseRemote();
+        proxy.call('PlayPause', null, Gio.DBusCallFlags.NONE, -1, null, null);
     }
 
     public stop(): void {
@@ -498,7 +566,7 @@ export class MprisService extends Signals.EventEmitter {
             return;
         }
 
-        proxy.NextRemote();
+        proxy.call('Next', null, Gio.DBusCallFlags.NONE, -1, null, null);
     }
 
     public previous(): void {
@@ -508,7 +576,7 @@ export class MprisService extends Signals.EventEmitter {
             return;
         }
 
-        proxy.PreviousRemote();
+        proxy.call('Previous', null, Gio.DBusCallFlags.NONE, -1, null, null);
     }
 
     public seek(offset: number): void {
@@ -519,7 +587,14 @@ export class MprisService extends Signals.EventEmitter {
         }
 
         try {
-            proxy.SeekRemote(offset);
+            proxy.call(
+                'Seek',
+                new GLib.Variant('(x)', [offset]), // x = int64
+                Gio.DBusCallFlags.NONE,
+                -1,
+                null,
+                null
+            );
         } catch (error) {
             logError(error);
         }
@@ -579,11 +654,16 @@ export class MprisService extends Signals.EventEmitter {
 
     public getMprisSeekPosition(): number | null {
         const proxy = this._mprisActivePlayer?.getMprisPlayerProxy();
-
         if (!proxy) return null;
 
-        const variant = proxy.get_cached_property('Position');
-        return variant ? variant.get_int64() : null;
+        try {
+            const variant = proxy.get_cached_property('Position');
+            if (!variant) return null;
+            return variant.unpack() as number;
+        } catch (e) {
+            logError(e);
+            return null;
+        }
     }
 
     public getMprisPlayerName(): string | null {
@@ -612,6 +692,7 @@ export class MprisService extends Signals.EventEmitter {
             mprisPlayer.disconnect();
         }
 
+        this._stopPositionPolling();
         this._mprisPlayers.clear();
         this._mprisActivePlayer = null;
         this.disconnectAll();

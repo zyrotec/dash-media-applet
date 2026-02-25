@@ -6,6 +6,7 @@ export type MprisMetadata = {
     length: number | null;
     albumArtist?: string[] | null;
     trackNumber?: number | null;
+    trackId: string | null;
     discNumber?: number | null;
     url?: string | null;
 };

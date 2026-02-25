@@ -41,7 +41,7 @@ export class ZyrotecDashComponent {
         });
 
         this._mediaLabelBox = new St.BoxLayout({
-            y_align: Clutter.ActorAlign.CENTER,
+            yAlign: Clutter.ActorAlign.CENTER,
             orientation: Clutter.Orientation.VERTICAL,
             styleClass: "zt-media-label-container",
             y_expand: false
@@ -66,15 +66,17 @@ export class ZyrotecDashComponent {
 
         this._mediaVisualizerWrapper = new St.Bin({
             x_align: Clutter.ActorAlign.CENTER,
-            y_align: Clutter.ActorAlign.CENTER,
+            yAlign: Clutter.ActorAlign.CENTER,
             x_expand: true,
             y_expand: true,
         });
 
-        this._mediaAudioVisualizer = new ZyrotecAudioVisualizer(this._cavaService, {
+        this._mediaAudioVisualizer = new ZyrotecAudioVisualizer({
             reactive: false,
             x_expand: false,
             y_expand: false,
+            width: 16,
+            height: 14
         });
 
         const labelWidth = 180 - (38 + (this._getDashIconSize() - (this._mediaDashBox.get_theme_node().get_padding(St.Side.TOP) * 2)));
@@ -132,6 +134,7 @@ export class ZyrotecDashComponent {
     }
 
     public destroy(): void {
+        this._mediaAudioVisualizer?.destroy();
         this._mediaDashBox.destroy();
     }
 }

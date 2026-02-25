@@ -7,7 +7,6 @@
 }
 
 .zt-media-art-box {
-  background-image: url("file:///home/louis/Pictures/Screenshots/Screenshot From 2026-01-13 22-12-06.png");
   background-position: center center;
   background-repeat: no-repeat;
   background-size: cover;
@@ -37,3 +36,130 @@
   padding: 0;
   margin-top: 1px;
 }
+
+/* CONTROLS POPOVER ================= */
+.zt-popover {
+  padding: 0;
+}
+
+.zt-popover-item {
+  background: #222;
+  padding: 12px;
+  border-radius: 18px;
+}
+/* ================================== */
+
+/* CONTROLS COMPONENT =============== */
+.zt-media-component {
+  spacing: 0px;
+}
+/* ================================== */
+
+/* CONTROLS ALBUM ART =============== */
+.zt-media-controls-art-box {
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  border-radius: 10px;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.zt-media-album-label-container {
+  margin: 4px;
+  border-radius: 8px;
+}
+
+.zt-media-album-blur-box {
+  background-position: -4px -225px;
+  background-repeat: no-repeat;
+  background-size: 250px;
+}
+
+.zt-media-album-label-box {
+  padding: 4px 6px 4px 6px;
+}
+
+.zt-media-album-label {
+  font-size: 12px;
+  font-weight: bold;
+  color: #ffffff;
+}
+/* ================================== */
+
+/* CONTROLS LABEL =================== */
+.zt-media-controls-label-container {
+  margin-top: 12px;
+  spacing: 2px;
+}
+
+.zt-media-controls-title-label {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.zt-media-controls-artist-label {
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: normal;
+}
+/* ================================== */
+
+/* CONTROLS PROGRESS ================ */
+.zt-media-progress-container {
+  margin-top: 10px;
+  spacing: 8px;
+}
+
+.zt-media-progress-slider {
+  -slider-handle-radius: 0px;
+
+  -barlevel-height: 4px;
+  -barlevel-background-color: rgba(255, 255, 255, 0.1);
+  -barlevel-active-background-color: #ffffff;
+
+  color: #ffffff;
+}
+
+.zt-media-progress-slider:hover {
+  color: #ffffff;
+}
+
+.zt-media-progress-label {
+  font-size: 12px;
+  font-weight: bold;
+  color: #ffffff;
+}
+/* ================================== */
+
+/* CONTROLS ========================= */
+.zt-media-controls-container {
+  margin-top: 4px;
+}
+
+.zt-media-center-controls-container {
+  spacing: 8px;
+}
+
+.zt-media-control-button {
+  padding: 8px;
+  color: #ffffff;
+  border-radius: 100px;
+}
+
+.zt-media-control-button:hover {
+  background-color: rgba(255, 255, 255, 0.116);
+}
+
+.zt-media-control-main-button {
+  padding: 8px 24px 8px 24px;
+  color: #ffffff;
+  border-radius: 100px;
+  background-color: rgba(255, 255, 255, 0.058);
+}
+
+.zt-media-control-main-button:hover {
+  background-color: rgba(255, 255, 255, 0.116);
+}
+/* ================================== */

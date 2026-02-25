@@ -9,14 +9,16 @@ import { MPRIS_CHANGED_SIGNALS } from './enums/mpris/mpris-changed-signals.enum.
 import { CavaService } from "./services/cava/cava-service.js";
 import { MprisService } from './services/mpris/mpris-service.js';
 import { MprisMetadata } from './types/mpris/mpris-metadata.type.js';
+import { ZyrotecMediaControls } from "./components/zyrotec-media-controls.ui.js";
 
 export default class MyExtension extends Extension {
   private _mprisService?: MprisService;
   private _cavaService?: CavaService;
   private _zyrotecDashComponent?: ZyrotecDashComponent;
+  private _zyrotecMediaControls?: ZyrotecMediaControls;
 
   private _mediaDashTriggerButton!: St.Button;
-  private _mediaPopupMenu!: PopupMenu.PopupMenu;
+  private _mediaPopupMenu?: PopupMenu.PopupMenu;
   private _menuManager?: PopupMenu.PopupMenuManager;
   private _mediaMenuItem?: PopupMenu.PopupBaseMenuItem;
 
@@ -30,19 +32,17 @@ export default class MyExtension extends Extension {
 
     const artUrl = metadata.artUrl ?? "";
     const title = metadata.title ?? 'Unknown Title';
-    let artist = "";
+    let artist = "Unknown Artist";
 
     if (Array.isArray(metadata.artist)) {
       artist = metadata.artist.map(a => typeof a === 'object' && 'unpack' in a ? (a as any).unpack() : a).join(', ');
-    } else {
+    } else if (!!metadata.artist) {
       if (typeof metadata.artist === 'object' && 'unpack' in (metadata.artist ?? {})) {
         artist = (metadata.artist as any)?.unpack();
       } else {
         artist = (metadata.artist as any);
       }
-    }
-
-    if (artist === "") {
+    } else {
       artist = "Unknown Artist";
     }
 
@@ -99,12 +99,7 @@ export default class MyExtension extends Extension {
     this._cavaService.cavaStart();
 
     this._zyrotecDashComponent = new ZyrotecDashComponent(this._cavaService);
-
-    this._mediaMenuItem = new PopupMenu.PopupBaseMenuItem({
-      reactive: false,
-      can_focus: false,
-      style_class: "zt-popover-item"
-    });
+    this._zyrotecMediaControls = new ZyrotecMediaControls(this._mprisService);
 
     this._mediaDashTriggerButton = new St.Button({
       reactive: true,
@@ -113,26 +108,30 @@ export default class MyExtension extends Extension {
       child: this._zyrotecDashComponent.getComponent()
     });
 
-    const placeHolder = new St.BoxLayout({
-      yExpand: true,
-      xExpand: true,
-      height: 250,
-      width: 250,
-      yAlign: Clutter.ActorAlign.CENTER,
-      clip_to_allocation: true
-    });
-
-    this._mediaMenuItem.add_child(placeHolder);
-
-    this._mediaPopupMenu = new PopupMenu.PopupMenu(this._mediaDashTriggerButton, 0.5, St.Side.TOP);
-    this._mediaPopupMenu.addMenuItem(this._mediaMenuItem);
-    this._mediaPopupMenu.actor.hide();
-
     Main.overview.dash._box.add_child(this._mediaDashTriggerButton);
-    Main.uiGroup.add_child(this._mediaPopupMenu.actor);
+
+    this._mediaPopupMenu = new PopupMenu.PopupMenu(
+      this._mediaDashTriggerButton,
+      0.5,
+      St.Side.TOP
+    );
+
+    Main.layoutManager.uiGroup.add_child(this._mediaPopupMenu.actor);
+    this._mediaPopupMenu.box.add_style_class_name("zt-popover");
+    this._mediaPopupMenu.actor.hide();
 
     this._menuManager = new PopupMenu.PopupMenuManager(this._mediaDashTriggerButton);
     this._menuManager.addMenu(this._mediaPopupMenu);
+
+    this._mediaMenuItem = new PopupMenu.PopupBaseMenuItem({
+      reactive: false,
+      can_focus: false,
+      style_class: "zt-popover-item"
+    });
+
+    
+    this._mediaMenuItem.add_child(this._zyrotecMediaControls.getComponent());
+    this._mediaPopupMenu.addMenuItem(this._mediaMenuItem);
 
     this._handleSignals();
     this._syncSession();
@@ -155,17 +154,28 @@ export default class MyExtension extends Extension {
 
     this._zyrotecDashComponent?.destroy();
     this._mprisService?.destroy();
+    this._zyrotecMediaControls?.destroy();
 
     this._zyrotecDashComponent = undefined;
     this._mprisService = undefined;
+    this._zyrotecMediaControls = undefined;
 
     this._mediaDashTriggerButton.destroy();
 
     if (this._mediaPopupMenu) {
       this._menuManager?.removeMenu(this._mediaPopupMenu);
+      Main.layoutManager.uiGroup.remove_child(this._mediaPopupMenu.actor);
+      this._mediaPopupMenu.destroy();
+      this._mediaPopupMenu = undefined;
+    }
+
+    if (this._mediaMenuItem) {
+      this._mediaMenuItem.destroy();
+      this._mediaMenuItem = undefined;
     }
 
     this._cavaService?.cavaStop();
+    this._cavaService = undefined;
   }
 
   private _getMonitorSource(): string {
@@ -196,10 +206,10 @@ export default class MyExtension extends Extension {
 
             [input]
             method = pulse
-            source = ${this._getMonitorSource()}
 
             [output]
             method = raw
+            bit_format = 16bit
             raw_target = /dev/stdout
             data_format = ascii
             ascii_max_range = 100

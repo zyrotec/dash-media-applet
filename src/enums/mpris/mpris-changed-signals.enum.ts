@@ -5,5 +5,6 @@ export enum MPRIS_CHANGED_SIGNALS {
     playbackStatusChanged = "mpris-playback-status-changed",
     shuffleChanged = "mpris-shuffle-changed",
     loopStatusChanged = "mpris-loop-status-changed",
-    activePlayerChanged = "mpris-active-player-changed"
+    activePlayerChanged = "mpris-active-player-changed",
+    positionChanged = "positionChanged"
 }
