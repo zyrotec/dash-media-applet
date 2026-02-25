@@ -16,6 +16,7 @@ interface MprisSignalMap {
     [MPRIS_CHANGED_SIGNALS.playbackStatusChanged]: [status: MprisPlaybackStatus];
     [MPRIS_CHANGED_SIGNALS.shuffleChanged]: [enabled: boolean];
     [MPRIS_CHANGED_SIGNALS.loopStatusChanged]: [loop: MprisLoopStatus];
+    [MPRIS_CHANGED_SIGNALS.positionChanged]: [position: number];
 }
 
 declare module 'resource:///org/gnome/shell/misc/signals.js' {

@@ -6,6 +6,7 @@ export enum MPRIS_METADATA {
     length = "mpris:length",
     albumArtist = "xesam:albumArtist",
     trackNumber = "xesam:trackNumber",
+    trackId = "mpris:trackid",
     discNumber = "xesam:discNumber",
     url = "xesam:url"
 }

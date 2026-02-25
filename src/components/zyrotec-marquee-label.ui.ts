@@ -2,21 +2,24 @@ import St from 'gi://St';
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
-import Cogl from 'gi://Cogl';
 
 export class ZyrotecMarqueeLabel {
-    private _marqueeLabel!: St.Widget;
-    private _marqueeLabelContainer!: St.BoxLayout;
+    private _marqueeWidget!: St.Widget;
+    private _marqueeBox!: St.BoxLayout;
     private _labelOne!: St.Label;
     private _labelTwo!: St.Label;
     private _labelSpacer!: St.Widget;
 
-    private _marqueeLabelAnimationDelay = 2000;
-    private _marqueeLabelScrollSpeed = 50;
-    private _labelSpacerGap = 50;
+    private _marqueeLabelAnimationDelay: number = 2000;
+    private _marqueeLabelScrollSpeed: number = 50;
+    private _labelSpacerGap: number = 50;
 
     private _isAnimating: boolean = false;
     private _animationDelaySource: number | null = null;
+    private _overflowCheckSource: number | null = null;
+
+    private _xAlign: Clutter.ActorAlign = Clutter.ActorAlign.START;
+    private _yAlign: Clutter.ActorAlign = Clutter.ActorAlign.CENTER;
 
     constructor(params?: Partial<St.Widget.ConstructorProps>) {
         this._init(params);
@@ -28,33 +31,41 @@ export class ZyrotecMarqueeLabel {
     }
 
     private _generateComponent(params?: Partial<St.Widget.ConstructorProps>): void {
-        this._marqueeLabel = new St.Widget({
+        this._marqueeWidget = new St.Widget({
             layout_manager: new Clutter.BinLayout(),
             clip_to_allocation: true,
-            y_align: Clutter.ActorAlign.CENTER,
-            y_expand: false,
+            yAlign: Clutter.ActorAlign.CENTER,
             ...params,
         });
 
-        this._marqueeLabelContainer = new St.BoxLayout({
+        // _marqueeBox fills full width of the widget so x_align on labelOne works
+        this._marqueeBox = new St.BoxLayout({
             orientation: Clutter.Orientation.HORIZONTAL,
-            y_align: Clutter.ActorAlign.CENTER,
+            yAlign: Clutter.ActorAlign.CENTER,
+            x_align: Clutter.ActorAlign.FILL,
+            x_expand: true,
             y_expand: false,
         });
 
         this._labelOne = new St.Label({
             text: '',
-            y_align: Clutter.ActorAlign.CENTER,
+            yAlign: Clutter.ActorAlign.CENTER,
+            x_align: Clutter.ActorAlign.START,
+            x_expand: true,
         });
 
         this._labelTwo = new St.Label({
             text: '',
-            y_align: Clutter.ActorAlign.CENTER,
+            yAlign: Clutter.ActorAlign.CENTER,
+            x_align: Clutter.ActorAlign.START,
+            x_expand: false,
+            visible: false,
         });
 
         this._labelSpacer = new St.Widget({
             width: this._labelSpacerGap,
-            height: 1
+            height: 1,
+            visible: false,
         });
 
         this._labelOne.clutter_text.set_ellipsize(Pango.EllipsizeMode.NONE);
@@ -65,20 +76,28 @@ export class ZyrotecMarqueeLabel {
         this._labelTwo.clutter_text.set_single_line_mode(true);
         this._labelTwo.clutter_text.set_line_wrap(false);
 
-        this._marqueeLabelContainer.add_child(this._labelOne);
-        this._marqueeLabelContainer.add_child(this._labelSpacer);
-        this._marqueeLabelContainer.add_child(this._labelTwo);
+        this._marqueeBox.add_child(this._labelOne);
+        this._marqueeBox.add_child(this._labelSpacer);
+        this._marqueeBox.add_child(this._labelTwo);
 
-        this._marqueeLabel.add_child(this._marqueeLabelContainer);
+        this._marqueeWidget.add_child(this._marqueeBox);
     }
 
     private _handleSignals(): void {
-        if (!this._marqueeLabel) {
+        this._marqueeWidget.connect('notify::allocation', () => {
+            this._scheduleOverflowCheck();
+        });
+    }
+
+    private _scheduleOverflowCheck(): void {
+        if (this._overflowCheckSource !== null) {
             return;
         }
 
-        this._marqueeLabel.connect('notify::allocation', () => {
+        this._overflowCheckSource = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._overflowCheckSource = null;
             this._checkMarqueeLabelOverflow();
+            return GLib.SOURCE_REMOVE;
         });
     }
 
@@ -87,28 +106,44 @@ export class ZyrotecMarqueeLabel {
         return natural;
     }
 
+    private _getWidgetWidth(): number {
+        return this._marqueeWidget.width;
+    }
+
+    private _applyStaticAlignment(): void {
+        this._labelOne.set_x_align(this._xAlign);
+        this._marqueeBox.set_x(0);
+    }
+
     private _checkMarqueeLabelOverflow(): void {
-        if (!this._marqueeLabel.get_stage())
+        if (!this._marqueeWidget.get_stage()) {
             return;
+        }
 
         const labelWidth = this._getLabelWidth();
-        const containerWidth = this._marqueeLabel.width;
+        const widgetWidth = this._getWidgetWidth();
 
-        if (labelWidth > containerWidth) {
-            this._startMarqueeAnimation();
+        if (labelWidth > widgetWidth) {
             this._labelTwo.visible = true;
             this._labelSpacer.visible = true;
+            // For marquee: labelOne must not expand, so the box scrolls naturally
+            this._labelOne.set_x_expand(false);
+            this._labelOne.set_x_align(Clutter.ActorAlign.START);
+            this._startMarqueeAnimation();
         } else {
-            this._stopMarqueeAnimation();
-            this._marqueeLabelContainer.set_x(0);
             this._labelTwo.visible = false;
             this._labelSpacer.visible = false;
+            this._stopMarqueeAnimation();
+            // Restore expand so alignment works
+            this._labelOne.set_x_expand(true);
+            this._applyStaticAlignment();
         }
     }
 
     private _startMarqueeAnimation(): void {
-        if (this._isAnimating)
+        if (this._isAnimating) {
             return;
+        }
 
         this._isAnimating = true;
 
@@ -131,36 +166,30 @@ export class ZyrotecMarqueeLabel {
             this._animationDelaySource = null;
         }
 
-        this._marqueeLabelContainer.remove_all_transitions();
+        this._marqueeBox.remove_all_transitions();
     }
 
     private _animate(): void {
-        const labelWidth = this._getLabelWidth();
-        if (!labelWidth)
+        if (!this._isAnimating) {
             return;
+        }
+
+        const labelWidth = this._getLabelWidth();
+        if (!labelWidth) {
+            return;
+        }
 
         const distance = Math.ceil(labelWidth) + this._labelSpacerGap;
         const duration = (distance / this._marqueeLabelScrollSpeed) * 1000;
 
-        this._marqueeLabelContainer.remove_all_transitions();
-        this._marqueeLabelContainer.set_x(0);
+        this._marqueeBox.remove_all_transitions();
+        this._marqueeBox.set_x(0);
 
-        this._marqueeLabelContainer.ease({
+        this._marqueeBox.ease({
             x: -distance,
             duration,
             mode: Clutter.AnimationMode.LINEAR,
             repeatCount: -1,
-            onComplete: () => {
-                if (!this._isAnimating) {
-                    return;
-                }
-
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-                    if (this._isAnimating)
-                        this._animate();
-                    return GLib.SOURCE_REMOVE;
-                });
-            },
         });
     }
 
@@ -169,16 +198,13 @@ export class ZyrotecMarqueeLabel {
         this._labelTwo.set_text(value);
 
         this._stopMarqueeAnimation();
-        this._marqueeLabelContainer.set_x(0);
-
-        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            this._checkMarqueeLabelOverflow();
-            return GLib.SOURCE_REMOVE;
-        });
+        this._labelOne.set_x_expand(true);
+        this._applyStaticAlignment();
+        this._scheduleOverflowCheck();
     }
 
     public setStyleClass(value: string): void {
-        this._marqueeLabel.set_style_class_name(value);
+        this._marqueeWidget.set_style_class_name(value);
     }
 
     public setMarqueeScrollSpeed(value: number): void {
@@ -195,16 +221,43 @@ export class ZyrotecMarqueeLabel {
     }
 
     public setWidth(value: number): void {
-        this._marqueeLabel.set_width(value);
-        this._marqueeLabelContainer.set_width(value);
+        this._marqueeWidget.set_width(value);
+    }
+
+    public setMaxWidth(value: number): void {
+        let minWidth = -1;
+
+        if(this._getLabelWidth() > value) {
+            minWidth = this._getLabelWidth();
+        } else {
+            minWidth = -1;
+        }
+
+        this._marqueeWidget.set_width(Math.min(minWidth, value));
+    }
+
+    public setAlignment(xAlign: Clutter.ActorAlign = Clutter.ActorAlign.START, yAlign: Clutter.ActorAlign = Clutter.ActorAlign.CENTER): void {
+        this._xAlign = xAlign;
+        this._yAlign = yAlign;
+        this._marqueeWidget.set_y_align(yAlign);
+
+        if (!this._isAnimating) {
+            this._labelOne.set_x_expand(true);
+            this._applyStaticAlignment();
+        }
     }
 
     public getComponent(): St.Widget {
-        return this._marqueeLabel;
+        return this._marqueeWidget;
     }
 
     public destroy(): void {
+        if (this._overflowCheckSource !== null) {
+            GLib.source_remove(this._overflowCheckSource);
+            this._overflowCheckSource = null;
+        }
+
         this._stopMarqueeAnimation();
-        this._marqueeLabel.destroy();
+        this._marqueeWidget.destroy();
     }
 }
