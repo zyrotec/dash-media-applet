@@ -11,11 +11,11 @@ import { MprisLoopStatus } from "../../types/mpris/mpris-loop-status.type.js";
 import { MprisMetadata } from "../../types/mpris/mpris-metadata.type.js";
 import { MprisPlaybackStatus } from "../../types/mpris/mpris-playback-status.type.js";
 import { MprisRawMetadata } from "../../types/mpris/mpris-raw-metadata.type.js";
-import { MprisPlayerService } from "./mpris-player-service.js";
+import { MprisPlayerUtil } from "./mpris-player.util.js";
 
-export class MprisService extends Signals.EventEmitter {
-    private _mprisPlayers: Map<string, MprisPlayerService> = new Map<string, MprisPlayerService>();
-    private _mprisActivePlayer: MprisPlayerService | null = null;
+export class MprisUtil extends Signals.EventEmitter {
+    private _mprisPlayers: Map<string, MprisPlayerUtil> = new Map<string, MprisPlayerUtil>();
+    private _mprisActivePlayer: MprisPlayerUtil | null = null;
     private _mprisNameWatcherId: number | null = null;
 
     private _mprisPositionTimerId: number | null = null;
@@ -104,7 +104,7 @@ export class MprisService extends Signals.EventEmitter {
                 try {
                     const playerProxy = Gio.DBusProxy.new_finish(result);
 
-                    const mprisPlayer = new MprisPlayerService(playerName, playerProxy);
+                    const mprisPlayer = new MprisPlayerUtil(playerName, playerProxy);
 
                     mprisPlayer.connectSignals((player, changed) => {
                         this._onMprisPropertiesChanged(player, changed);
@@ -144,7 +144,7 @@ export class MprisService extends Signals.EventEmitter {
     }
 
     private _switchToMostRecentMprisPlayer(): void {
-        let best: MprisPlayerService | null = null;
+        let best: MprisPlayerUtil | null = null;
 
         for (const candidate of this._mprisPlayers.values()) {
 
@@ -189,7 +189,7 @@ export class MprisService extends Signals.EventEmitter {
         }
     }
 
-    private _getPriority(player: MprisPlayerService | null): number {
+    private _getPriority(player: MprisPlayerUtil | null): number {
         if (!player) {
             return 0;
         }
@@ -204,7 +204,7 @@ export class MprisService extends Signals.EventEmitter {
         }
     }
 
-    private _shouldSwitchTo(candidate: MprisPlayerService): boolean {
+    private _shouldSwitchTo(candidate: MprisPlayerUtil): boolean {
         if (!this._mprisActivePlayer) {
             return true;
         }
@@ -243,7 +243,7 @@ export class MprisService extends Signals.EventEmitter {
         return false;
     }
 
-    private _getPlaybackStatus(player: MprisPlayerService): MprisPlaybackStatus {
+    private _getPlaybackStatus(player: MprisPlayerUtil): MprisPlaybackStatus {
         const variant = player
             .getMprisPlayerProxy()
             .get_cached_property(MPRIS_CHANGED_PROPERTIES.playbackStatus);
@@ -253,7 +253,7 @@ export class MprisService extends Signals.EventEmitter {
             : MPRIS_PLAYBACK_STATUS.stopped;
     }
 
-    private _setActiveMprisPlayer(mprisPlayerService: MprisPlayerService): void {
+    private _setActiveMprisPlayer(mprisPlayerService: MprisPlayerUtil): void {
         if (this._mprisActivePlayer === mprisPlayerService) {
             return;
         }
@@ -265,7 +265,7 @@ export class MprisService extends Signals.EventEmitter {
         this.emit(MPRIS_CHANGED_SIGNALS.activePlayerChanged, mprisPlayerService.getMprisBusName());
     }
 
-    private _onMprisPropertiesChanged(mprisPlayer: MprisPlayerService, changed: GLib.Variant): void {
+    private _onMprisPropertiesChanged(mprisPlayer: MprisPlayerUtil, changed: GLib.Variant): void {
         const changedProperties = <Record<string, GLib.Variant>>changed.deepUnpack();
         const shouldSwitchTo = this._shouldSwitchTo(mprisPlayer);
 
@@ -674,7 +674,7 @@ export class MprisService extends Signals.EventEmitter {
         return this._mprisActivePlayer.getMprisBusName();
     }
 
-    public getActiveMprisPlayer(): MprisPlayerService | null {
+    public getActiveMprisPlayer(): MprisPlayerUtil | null {
         return this._mprisActivePlayer;
     }
 

@@ -101,7 +101,7 @@ export class ZyrotecAudioVisualizer {
 
             this._readStdoutBytes();
             this._readStderrLine();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     private _readStdoutBytes(): void {
@@ -123,7 +123,6 @@ export class ZyrotecAudioVisualizer {
                         return;
                     }
 
-                    // Grow buffer if needed
                     const needed = this._bufferUsed + chunk.length;
                     if (needed > this._rawBuffer.length) {
                         const newBuffer = new Uint8Array(Math.max(needed, this._rawBuffer.length * 2));
@@ -137,7 +136,6 @@ export class ZyrotecAudioVisualizer {
                     const totalFrames = Math.floor(this._bufferUsed / frameSize);
 
                     if (totalFrames > 0) {
-                        // Only process the latest frame, skip stale ones
                         const lastFrameOffset = (totalFrames - 1) * frameSize;
                         const dv = new DataView(
                             this._rawBuffer.buffer,
@@ -153,7 +151,6 @@ export class ZyrotecAudioVisualizer {
                             if (v > maxVal) maxVal = v;
                         }
 
-                        // Silence detection
                         if (maxVal < NOISE_FLOOR) {
                             this._silentFrames++;
                         } else {
@@ -197,16 +194,14 @@ export class ZyrotecAudioVisualizer {
                             }
                         }
 
-                        // Discard all processed frames, keep remainder
                         this._rawBuffer.copyWithin(0, totalFrames * frameSize, this._bufferUsed);
                         this._bufferUsed -= totalFrames * frameSize;
 
-                        // Repaint only when new data arrived
                         this._audioDrawingArea.queue_repaint();
                     }
 
                     this._readStdoutBytes();
-                } catch (e) {}
+                } catch (e) { }
             }
         );
     }
@@ -221,7 +216,7 @@ export class ZyrotecAudioVisualizer {
             try {
                 const [line] = stream!.read_line_finish(res);
                 if (line !== null) this._readStderrLine();
-            } catch (e) {}
+            } catch (e) { }
         });
     }
 
@@ -232,22 +227,22 @@ export class ZyrotecAudioVisualizer {
         this._stdoutCancellable = null;
 
         if (this._process) {
-            try { this._process.force_exit(); } catch (e) {}
+            try { this._process.force_exit(); } catch (e) { }
             this._process = null;
         }
 
         if (this._stderrStream) {
-            try { this._stderrStream.close(null); } catch (e) {}
+            try { this._stderrStream.close(null); } catch (e) { }
             this._stderrStream = null;
         }
 
         if (this._stdout) {
-            try { this._stdout.close(null); } catch (e) {}
+            try { this._stdout.close(null); } catch (e) { }
             this._stdout = null;
         }
 
         if (this._stderr) {
-            try { this._stderr.close(null); } catch (e) {}
+            try { this._stderr.close(null); } catch (e) { }
             this._stderr = null;
         }
 
@@ -255,7 +250,7 @@ export class ZyrotecAudioVisualizer {
             try {
                 const file = Gio.File.new_for_path(this._tmpConfigPath);
                 if (file.query_exists(null)) file.delete(null);
-            } catch (e) {}
+            } catch (e) { }
             this._tmpConfigPath = null;
         }
 
@@ -271,7 +266,6 @@ export class ZyrotecAudioVisualizer {
         const totalHeight = this._audioDrawingArea.get_height();
         if (totalWidth <= 0 || totalHeight <= 0) return;
 
-        // Clear previous frame
         cr.save();
         cr.setOperator(Cairo.Operator.CLEAR);
         cr.paint();
@@ -295,11 +289,9 @@ export class ZyrotecAudioVisualizer {
             const halfHeight = Math.max(MIN_HEIGHT, this._prevHeights[i]);
             const x = offsetX + i * (barWidth + gap);
 
-            // Edge fade for depth
             const edgeFade = 1 - (Math.abs(i - (this._barCount - 1) / 2) / ((this._barCount - 1) / 2)) * 0.35;
             const barAlpha = isSilent ? alpha * edgeFade * 0.3 : alpha * edgeFade;
 
-            // Main bar — grows symmetrically from center
             cr.setSourceRGBA(r, g, b, barAlpha);
             cr.rectangle(x, centerY - halfHeight, barWidth, halfHeight * 2);
             cr.fill();
@@ -307,12 +299,10 @@ export class ZyrotecAudioVisualizer {
             if (!isSilent) {
                 const peak = Math.max(MIN_HEIGHT, this._peakValues[i]);
 
-                // Top peak line
                 cr.setSourceRGBA(r, g, b, barAlpha * 0.55);
                 cr.rectangle(x, centerY - peak - 1, barWidth, 1);
                 cr.fill();
 
-                // Bottom peak line — mirrored
                 cr.rectangle(x, centerY + peak, barWidth, 1);
                 cr.fill();
             }

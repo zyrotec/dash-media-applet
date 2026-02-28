@@ -4,18 +4,18 @@ import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
 import { MPRIS_CHANGED_SIGNALS } from "../enums/mpris/mpris-changed-signals.enum.js";
 import { MPRIS_LOOP_STATUS } from "../enums/mpris/mpris-loop-status.enum.js";
 import { MPRIS_PLAYBACK_STATUS } from "../enums/mpris/mpris-playback-status.enum.js";
-import { ColorService } from "../services/color/color-service.js";
-import { DominantColorService } from "../services/dominant-color/dominant-color-service.js";
-import { MprisService } from "../services/mpris/mpris-service.js";
 import { MprisMetadata } from "../types/mpris/mpris-metadata.type.js";
+import { MprisUtil } from "../utils/mpris/mpris.util.js";
 import { ZyrotecMarqueeLabel } from "./zyrotec-marquee-label.ui.js";
 
+import { MEDIA_CONTROL_ICONS } from "../enums/media-controls/media-control-icons.enum.js";
+import { RGB } from "../types/color/rgb.type.js";
+import { MprisLoopStatus } from "../types/mpris/mpris-loop-status.type.js";
+import { MprisPlaybackStatus } from "../types/mpris/mpris-playback-status.type.js";
 import { ZyrotecMaxWidthBoxLayout } from "./zyrotec-max-width-box-layout.ui.js";
 
 export class ZyrotecMediaControls {
-    private _mprisService!: MprisService;
-    private _dominantColorService!: DominantColorService;
-    private _colorService!: ColorService;
+    private _mprisService!: MprisUtil;
 
     private _mediaComponent!: St.BoxLayout;
     private _mediaArtBox!: St.BoxLayout;
@@ -55,21 +55,14 @@ export class ZyrotecMediaControls {
 
     private _mediaProgressPosition: number | null = null;
     private _destroyed: boolean = false;
-    private _signalIds: number[] = [];
     private _buttonSignalIds: Map<St.Button, number[]> = new Map();
     private _sliderSignalIds: number[] = [];
     private _currentTrackFingerprint: string | null = null;
     private _dominantColor: { r: number, g: number, b: number; } = { r: 255, g: 255, b: 255 };
 
-    constructor(
-        private mprisService: MprisService,
-        private dominantColorService: DominantColorService,
-        private colorService: ColorService) {
+    constructor(private mprisService: MprisUtil) {
         this._mprisService = mprisService;
-        this._dominantColorService = dominantColorService;
-        this._colorService = colorService;
         this._init();
-        this._handleMprisSignals();
         this._handlePlaybackButtonEvents();
         this._handlePlaybackProgressEvents();
     }
@@ -193,8 +186,12 @@ export class ZyrotecMediaControls {
 
         this._mediaTitleLabel.setWidth(250);
         this._mediaArtistLabel.setWidth(250);
+        this._mediaTitleLabel.setMarqueeScrollSpeed(40);
+        this._mediaArtistLabel.setMarqueeScrollSpeed(40);
         this._mediaTitleLabel.setLabelSpacerGap(24);
         this._mediaArtistLabel.setLabelSpacerGap(20);
+        this._mediaTitleLabel.setMarqueeAnimationDelay(60);
+        this._mediaArtistLabel.setMarqueeAnimationDelay(60);
         this._mediaTitleLabel.setAlignment(Clutter.ActorAlign.CENTER, Clutter.ActorAlign.CENTER);
         this._mediaArtistLabel.setAlignment(Clutter.ActorAlign.CENTER, Clutter.ActorAlign.CENTER);
 
@@ -336,148 +333,6 @@ export class ZyrotecMediaControls {
         this._mediaControlBox.add_child(this._mediaRepeatButton);
 
         this._mediaComponent.add_child(this._mediaControlBox);
-    }
-
-    private _handleMprisSignals(): void {
-        const playbackStatusSignal = this._mprisService.connect(MPRIS_CHANGED_SIGNALS.playbackStatusChanged, (service, args) => {
-            if (this._destroyed) {
-                return;
-            }
-
-            try {
-                switch (args) {
-                    case MPRIS_PLAYBACK_STATUS.playing:
-                        this._mediaPlayIcon.set_icon_name("media-playback-pause-symbolic");
-                        break;
-                    case MPRIS_PLAYBACK_STATUS.paused:
-                        this._mediaPlayIcon.set_icon_name("media-playback-start-symbolic");
-                        break;
-                    case MPRIS_PLAYBACK_STATUS.stopped:
-                        this._mediaPlayIcon.set_icon_name("media-playback-start-symbolic");
-                        break;
-                    default:
-                        break;
-                }
-            } catch (error) { }
-        });
-        this._signalIds.push(playbackStatusSignal);
-
-        const shuffleSignal = this._mprisService.connect(MPRIS_CHANGED_SIGNALS.shuffleChanged, (service, args) => {
-            if (this._destroyed) {
-                return;
-            }
-
-            try {
-                this._mediaShuffleIcon.set_icon_name((args === true) ? "media-playlist-consecutive-symbolic" : "media-playlist-shuffle-symbolic");
-            } catch (error) { }
-        });
-        this._signalIds.push(shuffleSignal);
-
-        const positionSignal = this._mprisService.connect(MPRIS_CHANGED_SIGNALS.positionChanged, (service, args) => {
-            if (this._destroyed) {
-                return;
-            }
-
-            try {
-                const metadata = this._mprisService.getMprisMetadata();
-
-                if (!metadata?.length || typeof metadata.length !== 'number' || metadata.length <= 0) {
-                    return;
-                }
-
-                if (!Number.isFinite(args) || args < 0) {
-                    return;
-                }
-
-                if (this._mediaProgressPosition !== null) {
-                    const diff = Math.abs(args - this._mediaProgressPosition);
-                    if (diff > 1000000) {
-                        this._mediaProgressLabel.text = this._formatPositionTime(this._mediaProgressPosition, metadata?.length);
-                        return;
-                    };
-                    this._mediaProgressPosition = null;
-                    return;
-                }
-
-                if (!this._isMediaProgressSliderDragging) {
-                    this._mediaProgressSlider.value = args / metadata.length;
-                    this._mediaProgressLabel.text = this._formatPositionTime(args, metadata?.length);
-                }
-
-                this._mediaDurationLabel.text = this._formatPositionTime(metadata.length);
-            } catch (error) { }
-        });
-        this._signalIds.push(positionSignal);
-
-        const metadataSignal = this._mprisService.connect(MPRIS_CHANGED_SIGNALS.metadataChanged, (service, args: MprisMetadata) => {
-            if (this._destroyed) return;
-
-            try {
-                const metadata = this._mprisService.getMprisMetadata();
-
-                this._setMediaText(metadata);
-                this._setDominantColor(metadata);
-                this._setMediaArtUrl(metadata);
-
-                if (!metadata?.length || typeof metadata.length !== 'number' || metadata.length <= 0) {
-                    return;
-                };
-
-                const fingerprint = this._getTrackFingerprint(metadata);
-                const isNewTrack = fingerprint !== this._currentTrackFingerprint;
-                this._currentTrackFingerprint = fingerprint;
-
-                if (isNewTrack) {
-                    this._mediaProgressSlider.value = 0;
-                    this._mediaProgressLabel.text = "0:00";
-                }
-
-                this._mediaDurationLabel.text = this._formatPositionTime(metadata.length);
-            } catch (error) { }
-        });
-        this._signalIds.push(metadataSignal);
-
-        const loopStatusSignal = this._mprisService.connect(MPRIS_CHANGED_SIGNALS.loopStatusChanged, (service, args) => {
-            if (this._destroyed) {
-                return;
-            }
-
-            try {
-                let iconColor = ``;
-
-                switch (args) {
-                    case MPRIS_LOOP_STATUS.track:
-                        this._mediaRepeatIcon.set_icon_name("media-playlist-repeat-song-symbolic");
-                        iconColor = `rgb(${this._dominantColor.r}, ${this._dominantColor.g}, ${this._dominantColor.b})`;
-                        break;
-                    case MPRIS_LOOP_STATUS.playlist:
-                        this._mediaRepeatIcon.set_icon_name("media-playlist-repeat-symbolic");
-                        iconColor = `rgb(${this._dominantColor.r}, ${this._dominantColor.g}, ${this._dominantColor.b})`;
-                        break;
-                    case MPRIS_LOOP_STATUS.none:
-                        this._mediaRepeatIcon.set_icon_name("media-playlist-repeat-symbolic");
-                        iconColor = `rgba(${this._dominantColor.r}, ${this._dominantColor.g}, ${this._dominantColor.b}, 0.5)`;
-                        break;
-                    default:
-                        this._mediaRepeatIcon.set_icon_name("media-playlist-repeat-symbolic");
-                        iconColor = `rgba(${this._dominantColor.r}, ${this._dominantColor.g}, ${this._dominantColor.b}, 0.5)`;
-                        break;
-                }
-
-                if (this._isRepeatButtonHovered) {
-                    this._mediaRepeatButton.set_style(`
-                        color: ${iconColor}; 
-                        background-color: rgba(${this._dominantColor.r}, ${this._dominantColor.g}, ${this._dominantColor.b}, 0.116);
-                    `);
-                } else {
-                    this._mediaRepeatButton.set_style(`
-                        color: ${iconColor}; 
-                        background-color: rgba(${this._dominantColor.r}, ${this._dominantColor.g}, ${this._dominantColor.b}, 0);
-                    `);
-                }
-            } catch (error) { }
-        });
-        this._signalIds.push(loopStatusSignal);
     }
 
     private _handlePlaybackButtonEvents(): void {
@@ -746,146 +601,202 @@ export class ZyrotecMediaControls {
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
 
-    private _setMediaText(metadata: MprisMetadata | null): void {
-        if (!metadata) {
-            return;
-        }
+    public setTitleText(value: string): void {
+        this._mediaTitleLabel.setText(value);
+    }
 
-        const title = metadata.title ?? 'Unknown Title';
-        const album = metadata.album ?? 'Unknown Album';
-        let artist = "Unknown Artist";
-
-        if (Array.isArray(metadata.artist)) {
-            artist = metadata.artist.map(a => typeof a === 'object' && 'unpack' in a ? (a as any).unpack() : a).join(', ');
-        } else if (!!metadata.artist) {
-            if (typeof metadata.artist === 'object' && 'unpack' in (metadata.artist ?? {})) {
-                artist = (metadata.artist as any)?.unpack();
-            } else {
-                artist = (metadata.artist as any);
-            }
-        } else {
-            artist = "Unknown Artist";
-        }
-
-        this._mediaTitleLabel.setText(title);
-        this._mediaArtistLabel.setText(artist);
-        this._mediaAlbumLabel.setText(album);
+    public setAlbumText(value: string): void {
+        this._mediaAlbumLabel.setText(value);
         this._mediaAlbumLabel.setMaxWidth(125 - 16);
     }
 
-    private _setMediaArtUrl(metadata: MprisMetadata | null): void {
-        if (!metadata || !metadata.artUrl) {
-            return;
-        }
+    public setArtistText(value: string): void {
+        this._mediaArtistLabel.setText(value);
 
-        let uri = metadata.artUrl;
-
-        if (!uri?.startsWith('file://') &&
-            !uri?.startsWith('http://') &&
-            !uri?.startsWith('https://')) {
-            uri = `file://${decodeURI(uri ?? "")}`;
-        }
-
-        this._mediaArtBox.set_style(`background-image: url("${uri ?? ''}");`);
-        this._mediaAlbumBlurBox.set_style(`background-image: url("${uri ?? ''}");`);
     }
 
-    private async _setDominantColor(metadata: MprisMetadata | null): Promise<void> {
-        if (!metadata || !metadata.artUrl) {
+    public setMediaArtUrl(value: string): void {
+        this._mediaArtBox.set_style(`background-image: url("${value ?? ''}");`);
+        this._mediaAlbumBlurBox.set_style(`background-image: url("${value ?? ''}");`);
+    }
+
+    public setDominantColor({ r: rAccent, g: gAccent, b: bAccent }: RGB, { r: rBackground, g: gBackground, b: bBackground }: RGB): void {
+        this._dominantColor = { r: rAccent, g: gAccent, b: bAccent };
+
+        const loopStatus = this._mprisService.getMprisLoopStatus();
+        let repeatIconColor = `rgb(${rAccent}, ${gAccent}, ${bAccent})`;
+
+        switch (loopStatus) {
+            case MPRIS_LOOP_STATUS.track:
+                repeatIconColor = `rgb(${rAccent}, ${gAccent}, ${bAccent})`;
+                break;
+            case MPRIS_LOOP_STATUS.playlist:
+                repeatIconColor = `rgb(${rAccent}, ${gAccent}, ${bAccent})`;
+                break;
+            case MPRIS_LOOP_STATUS.none:
+                repeatIconColor = `rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.5)`;
+                break;
+            default:
+                repeatIconColor = `rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.5)`;
+                break;
+        }
+
+        this._mediaProgressSlider.set_style(`
+            -barlevel-active-background-color: rgb(${rAccent}, ${gAccent}, ${bAccent});
+            -barlevel-background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.1);
+            color: rgb(${rAccent}, ${gAccent}, ${bAccent});
+            `);
+
+        this._mediaAlbumLayerBox.set_style(`background: rgba(${rBackground}, ${gBackground}, ${bBackground}, 0.25); border-radius: 8px;`);
+        this._mediaAlbumLabel.setTextColor(rAccent, gAccent, bAccent);
+        this._mediaTitleLabel.setTextColor(rAccent, gAccent, bAccent);
+        this._mediaArtistLabel.setTextColor(rAccent, gAccent, bAccent);
+        this._mediaProgressLabel.set_style(`color: rgb(${rAccent}, ${gAccent}, ${bAccent});`);
+        this._mediaDurationLabel.set_style(`color: rgb(${rAccent}, ${gAccent}, ${bAccent});`);
+        this._mediaShuffleButton.set_style(`color: rgb(${rAccent}, ${gAccent}, ${bAccent});`);
+        this._mediaPlayButton.set_style(`color: rgb(${rAccent}, ${gAccent}, ${bAccent}); background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.058);`);
+        this._mediaRepeatButton.set_style(`color: ${repeatIconColor};`);
+
+        if (this._isSkipButtonHovered) {
+            this._mediaSkipButton.set_style(`
+                color: rgb(${rAccent}, ${gAccent}, ${bAccent}); 
+                background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.116);
+            `);
+        } else {
+            this._mediaSkipButton.set_style(`
+                color: rgb(${rAccent}, ${gAccent}, ${bAccent}); 
+                background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0);
+            `);
+        }
+
+        if (this._isSkipBackwardButtonHovered) {
+            this._mediaSkipBackwardButton.set_style(`
+                color: rgb(${rAccent}, ${gAccent}, ${bAccent}); 
+                background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.116);
+            `);
+        } else {
+            this._mediaSkipBackwardButton.set_style(`
+                color: rgb(${rAccent}, ${gAccent}, ${bAccent}); 
+                background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0);
+            `);
+        }
+
+        if (this._isRepeatButtonHovered) {
+            this._mediaRepeatButton.set_style(`
+                color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.5); 
+                background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.116);
+            `);
+        } else {
+            this._mediaRepeatButton.set_style(`
+                color: ${repeatIconColor}; 
+                background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0);
+            `);
+        }
+
+        this._mediaComponent.set_style(`
+            background-color: rgb(${rBackground}, ${gBackground}, ${bBackground}); 
+            border: 1px solid st-mix(rgb(${rBackground}, ${gBackground}, ${bBackground}), rgb(${rAccent}, ${gAccent}, ${bAccent}), 90%);
+        `);
+    }
+
+    public setShuffleState(value: boolean): void {
+        this._mediaShuffleIcon.set_icon_name((value === true) ? MEDIA_CONTROL_ICONS.consecutive : MEDIA_CONTROL_ICONS.shuffle);
+    }
+
+    public setPlayState(value: MprisPlaybackStatus): void {
+        switch (value) {
+            case MPRIS_PLAYBACK_STATUS.playing:
+                this._mediaPlayIcon.set_icon_name(MEDIA_CONTROL_ICONS.pause);
+                break;
+            case MPRIS_PLAYBACK_STATUS.paused:
+                this._mediaPlayIcon.set_icon_name(MEDIA_CONTROL_ICONS.play);
+                break;
+            case MPRIS_PLAYBACK_STATUS.stopped:
+                this._mediaPlayIcon.set_icon_name(MEDIA_CONTROL_ICONS.play);
+                break;
+            default:
+                break;
+        }
+    }
+
+    public setRepeatState(value: MprisLoopStatus): void {
+        let iconColor = ``;
+
+        switch (value) {
+            case MPRIS_LOOP_STATUS.track:
+                this._mediaRepeatIcon.set_icon_name(MEDIA_CONTROL_ICONS.repeatSong);
+                iconColor = `rgb(${this._dominantColor.r}, ${this._dominantColor.g}, ${this._dominantColor.b})`;
+                break;
+            case MPRIS_LOOP_STATUS.playlist:
+                this._mediaRepeatIcon.set_icon_name(MEDIA_CONTROL_ICONS.repeat);
+                iconColor = `rgb(${this._dominantColor.r}, ${this._dominantColor.g}, ${this._dominantColor.b})`;
+                break;
+            case MPRIS_LOOP_STATUS.none:
+                this._mediaRepeatIcon.set_icon_name(MEDIA_CONTROL_ICONS.repeat);
+                iconColor = `rgba(${this._dominantColor.r}, ${this._dominantColor.g}, ${this._dominantColor.b}, 0.5)`;
+                break;
+            default:
+                this._mediaRepeatIcon.set_icon_name(MEDIA_CONTROL_ICONS.repeat);
+                iconColor = `rgba(${this._dominantColor.r}, ${this._dominantColor.g}, ${this._dominantColor.b}, 0.5)`;
+                break;
+        }
+
+        if (this._isRepeatButtonHovered) {
+            this._mediaRepeatButton.set_style(`
+                color: ${iconColor}; 
+                background-color: rgba(${this._dominantColor.r}, ${this._dominantColor.g}, ${this._dominantColor.b}, 0.116);
+            `);
+        } else {
+            this._mediaRepeatButton.set_style(`
+                color: ${iconColor}; 
+                background-color: rgba(${this._dominantColor.r}, ${this._dominantColor.g}, ${this._dominantColor.b}, 0);
+            `);
+        }
+    }
+
+    public setPositionState(value: number, metadata: MprisMetadata | null): void {
+
+        if (!metadata?.length || typeof metadata.length !== 'number' || metadata.length <= 0) {
             return;
         }
 
-        try {
-            let uri = metadata.artUrl;
-
-            if (!uri?.startsWith('file://') &&
-                !uri?.startsWith('http://') &&
-                !uri?.startsWith('https://')) {
-                uri = `${decodeURI(uri ?? "")}`;
-            }
-
-            const dominantColor = (await this._dominantColorService.getDominantColorFromImage(uri)) ?? { r: 255, g: 255, b: 255 };
-            const { r: rAccent, g: gAccent, b: bAccent } = this._colorService.getLuminanceColor(dominantColor, 0.25, 0.625);
-            const { r: rBackground, g: gBackground, b: bBackground } = this._colorService.getInvertedLuminanceColor(dominantColor, { r: rAccent, g: gAccent, b: bAccent }, 0.125);
-
-            this._dominantColor = { r: rAccent, g: gAccent, b: bAccent };
-
-            const loopStatus = this._mprisService.getMprisLoopStatus();
-            let repeatIconColor = `rgb(${rAccent}, ${gAccent}, ${bAccent})`;
-
-            switch (loopStatus) {
-                case MPRIS_LOOP_STATUS.track:
-                    repeatIconColor = `rgb(${rAccent}, ${gAccent}, ${bAccent})`;
-                    break;
-                case MPRIS_LOOP_STATUS.playlist:
-                    repeatIconColor = `rgb(${rAccent}, ${gAccent}, ${bAccent})`;
-                    break;
-                case MPRIS_LOOP_STATUS.none:
-                    repeatIconColor = `rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.5)`;
-                    break;
-                default:
-                    repeatIconColor = `rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.5)`;
-                    break;
-            }
-
-            this._mediaProgressSlider.set_style(`
-                -barlevel-active-background-color: rgb(${rAccent}, ${gAccent}, ${bAccent});
-                -barlevel-background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.1);
-                color: rgb(${rAccent}, ${gAccent}, ${bAccent});
-            `);
-            this._mediaAlbumLayerBox.set_style(`background: rgba(${rBackground}, ${gBackground}, ${bBackground}, 0.25); border-radius: 8px;`);
-            this._mediaAlbumLabel.setTextColor(rAccent, gAccent, bAccent);
-            this._mediaTitleLabel.setTextColor(rAccent, gAccent, bAccent);
-            this._mediaArtistLabel.setTextColor(rAccent, gAccent, bAccent);
-            this._mediaProgressLabel.set_style(`color: rgb(${rAccent}, ${gAccent}, ${bAccent});`);
-            this._mediaDurationLabel.set_style(`color: rgb(${rAccent}, ${gAccent}, ${bAccent});`);
-            this._mediaShuffleButton.set_style(`color: rgb(${rAccent}, ${gAccent}, ${bAccent});`);
-            this._mediaPlayButton.set_style(`color: rgb(${rAccent}, ${gAccent}, ${bAccent}); background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.058);`);
-            this._mediaRepeatButton.set_style(`color: ${repeatIconColor};`);
-
-            if (this._isSkipButtonHovered) {
-                this._mediaSkipButton.set_style(`
-                    color: rgb(${rAccent}, ${gAccent}, ${bAccent}); 
-                    background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.116);
-                `);
-            } else {
-                this._mediaSkipButton.set_style(`
-                    color: rgb(${rAccent}, ${gAccent}, ${bAccent}); 
-                    background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0);
-                `);
-            }
-
-            if (this._isSkipBackwardButtonHovered) {
-                this._mediaSkipBackwardButton.set_style(`
-                    color: rgb(${rAccent}, ${gAccent}, ${bAccent}); 
-                    background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.116);
-                `);
-            } else {
-                this._mediaSkipBackwardButton.set_style(`
-                    color: rgb(${rAccent}, ${gAccent}, ${bAccent}); 
-                    background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0);
-                `);
-            }
-
-            if (this._isRepeatButtonHovered) {
-                this._mediaRepeatButton.set_style(`
-                    color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.5); 
-                    background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0.116);
-                `);
-            } else {
-                this._mediaRepeatButton.set_style(`
-                    color: ${repeatIconColor}; 
-                    background-color: rgba(${rAccent}, ${gAccent}, ${bAccent}, 0);
-                `);
-            }
-
-            this._mediaComponent.set_style(`
-                background-color: rgb(${rBackground}, ${gBackground}, ${bBackground}); 
-                border: 1px solid st-mix(rgb(${rBackground}, ${gBackground}, ${bBackground}), rgb(${rAccent}, ${gAccent}, ${bAccent}), 90%);
-            `);
-        } catch (error) {
-            logError(error);
+        if (!Number.isFinite(value) || value < 0) {
+            return;
         }
+
+        if (this._mediaProgressPosition !== null) {
+            const diff = Math.abs(value - this._mediaProgressPosition);
+            if (diff > 1000000) {
+                this._mediaProgressLabel.text = this._formatPositionTime(this._mediaProgressPosition, metadata?.length);
+                return;
+            };
+            this._mediaProgressPosition = null;
+            return;
+        }
+
+        if (!this._isMediaProgressSliderDragging) {
+            this._mediaProgressSlider.value = value / metadata.length;
+            this._mediaProgressLabel.text = this._formatPositionTime(value, metadata?.length);
+        }
+
+        this._mediaDurationLabel.text = this._formatPositionTime(metadata.length);
+    }
+
+    public setDefaultPositionState(metadata: MprisMetadata | null): void {
+        if (!metadata?.length || typeof metadata.length !== 'number' || metadata.length <= 0) {
+            return;
+        };
+
+        const fingerprint = this._getTrackFingerprint(metadata);
+        const isNewTrack = fingerprint !== this._currentTrackFingerprint;
+        this._currentTrackFingerprint = fingerprint;
+
+        if (isNewTrack) {
+            this._mediaProgressSlider.value = 0;
+            this._mediaProgressLabel.text = "0:00";
+        }
+
+        this._mediaDurationLabel.text = this._formatPositionTime(metadata.length);
     }
 
     public getComponent(): St.BoxLayout {
@@ -894,13 +805,6 @@ export class ZyrotecMediaControls {
 
     public destroy(): void {
         this._destroyed = true;
-
-        for (const signalId of this._signalIds) {
-            try {
-                this._mprisService.disconnect(signalId);
-            } catch (error) { }
-        }
-        this._signalIds = [];
 
         for (const [button, signalIds] of this._buttonSignalIds.entries()) {
             for (const signalId of signalIds) {
