@@ -227,7 +227,7 @@ export class ZyrotecMarqueeLabel {
     public setMaxWidth(value: number): void {
         let minWidth = -1;
 
-        if(this._getLabelWidth() > value) {
+        if (this._getLabelWidth() > value) {
             minWidth = this._getLabelWidth();
         } else {
             minWidth = -1;
@@ -245,6 +245,11 @@ export class ZyrotecMarqueeLabel {
             this._labelOne.set_x_expand(true);
             this._applyStaticAlignment();
         }
+    }
+
+    public setTextColor(r: number, g: number, b: number): void {
+        this._labelOne.set_style(`color: rgb(${r}, ${g}, ${b});`);
+        this._labelTwo.set_style(`color: rgb(${r}, ${g}, ${b});`);
     }
 
     public getComponent(): St.Widget {

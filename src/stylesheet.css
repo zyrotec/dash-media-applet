@@ -40,11 +40,11 @@
 /* CONTROLS POPOVER ================= */
 .zt-popover {
   padding: 0;
+  border: none;
 }
 
 .zt-popover-item {
-  background: #222;
-  padding: 12px;
+  padding: 0px;
   border-radius: 18px;
 }
 /* ================================== */
@@ -52,6 +52,8 @@
 /* CONTROLS COMPONENT =============== */
 .zt-media-component {
   spacing: 0px;
+  padding: 12px;
+  border-radius: 18px;
 }
 /* ================================== */
 
