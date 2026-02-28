@@ -1,19 +1,20 @@
-import Clutter from "gi://Clutter";
 import GLib from "gi://GLib";
 import St from "gi://St";
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import { ZyrotecDashComponent } from './components/zyrotec-dash-component.ui.js';
-import { MPRIS_CHANGED_SIGNALS } from './enums/mpris/mpris-changed-signals.enum.js';
-import { CavaService } from "./services/cava/cava-service.js";
-import { MprisService } from './services/mpris/mpris-service.js';
-import { MprisMetadata } from './types/mpris/mpris-metadata.type.js';
 import { ZyrotecMediaControls } from "./components/zyrotec-media-controls.ui.js";
+import { CavaService } from "./services/cava/cava-service.js";
+import { ColorService } from "./services/color/color-service.js";
+import { DominantColorService } from "./services/dominant-color/dominant-color-service.js";
+import { MprisService } from './services/mpris/mpris-service.js';
 
 export default class MyExtension extends Extension {
   private _mprisService?: MprisService;
   private _cavaService?: CavaService;
+  private _dominantColorService?: DominantColorService;
+  private _colorService?: ColorService;
   private _zyrotecDashComponent?: ZyrotecDashComponent;
   private _zyrotecMediaControls?: ZyrotecMediaControls;
 
@@ -22,72 +23,7 @@ export default class MyExtension extends Extension {
   private _menuManager?: PopupMenu.PopupMenuManager;
   private _mediaMenuItem?: PopupMenu.PopupBaseMenuItem;
 
-  private _signalIds: number[] = [];
-  private _sessionSignalId?: number;
-
-  private _updateMetadata(metadata: MprisMetadata | null): void {
-    if (!metadata) {
-      return;
-    }
-
-    const artUrl = metadata.artUrl ?? "";
-    const title = metadata.title ?? 'Unknown Title';
-    let artist = "Unknown Artist";
-
-    if (Array.isArray(metadata.artist)) {
-      artist = metadata.artist.map(a => typeof a === 'object' && 'unpack' in a ? (a as any).unpack() : a).join(', ');
-    } else if (!!metadata.artist) {
-      if (typeof metadata.artist === 'object' && 'unpack' in (metadata.artist ?? {})) {
-        artist = (metadata.artist as any)?.unpack();
-      } else {
-        artist = (metadata.artist as any);
-      }
-    } else {
-      artist = "Unknown Artist";
-    }
-
-    this._zyrotecDashComponent?.setMediaArtUrl(artUrl);
-    this._zyrotecDashComponent?.setMediaTitle(title);
-    this._zyrotecDashComponent?.setMediaArtist(artist);
-  }
-
-  private _syncSession(): void {
-    if (!this._mprisService || !this._zyrotecDashComponent) {
-      return;
-    }
-
-    if (!this._mprisService.isMprisConnected()) {
-      this._zyrotecDashComponent.getComponent().visible = false;
-      this._zyrotecDashComponent.setMediaArtUrl("");
-      this._zyrotecDashComponent.setMediaTitle("");
-      this._zyrotecDashComponent.setMediaArtist("");
-      return;
-    }
-
-    this._zyrotecDashComponent.getComponent().visible = true;
-
-    const metadata = this._mprisService.getMprisMetadata();
-    this._updateMetadata(metadata);
-  }
-
-  private _handleSignals(): void {
-    if (!this._mprisService) {
-      return;
-    }
-
-    const mprisConnectedSignal = this._mprisService.connect(MPRIS_CHANGED_SIGNALS.playerConnected, this._syncSession.bind(this));
-    const mprisDisconnectedSignal = this._mprisService.connect(MPRIS_CHANGED_SIGNALS.playerDisconnected, this._syncSession.bind(this));
-    const mprisMetaDataSignal = this._mprisService.connect(MPRIS_CHANGED_SIGNALS.metadataChanged, (_, args: MprisMetadata) => {
-      this._updateMetadata(args);
-    });
-
-    this._signalIds = [...this._signalIds, ...[mprisConnectedSignal, mprisDisconnectedSignal, mprisMetaDataSignal]];
-
-    this._sessionSignalId = Main.sessionMode.connect(
-      "updated",
-      this._syncSession.bind(this)
-    );
-
+  private _handleTriggerButtonClick(): void {
     this._mediaDashTriggerButton.connect('clicked', () => {
       this._mediaPopupMenu?.toggle();
     });
@@ -96,10 +32,21 @@ export default class MyExtension extends Extension {
   enable() {
     this._mprisService = new MprisService();
     this._cavaService = new CavaService(this._setCavaConfig());
+    this._dominantColorService = new DominantColorService();
+    this._colorService = new ColorService();
     this._cavaService.cavaStart();
 
-    this._zyrotecDashComponent = new ZyrotecDashComponent(this._cavaService);
-    this._zyrotecMediaControls = new ZyrotecMediaControls(this._mprisService);
+    this._zyrotecDashComponent = new ZyrotecDashComponent(
+      this._mprisService,
+      this._dominantColorService,
+      this._colorService
+    );
+
+    this._zyrotecMediaControls = new ZyrotecMediaControls(
+      this._mprisService,
+      this._dominantColorService,
+      this._colorService
+    );
 
     this._mediaDashTriggerButton = new St.Button({
       reactive: true,
@@ -129,29 +76,13 @@ export default class MyExtension extends Extension {
       style_class: "zt-popover-item"
     });
 
-    
     this._mediaMenuItem.add_child(this._zyrotecMediaControls.getComponent());
     this._mediaPopupMenu.addMenuItem(this._mediaMenuItem);
 
-    this._handleSignals();
-    this._syncSession();
+    this._handleTriggerButtonClick();
   }
 
   disable() {
-    for (const signalId of this._signalIds) {
-      if (!this._mprisService) {
-        continue;
-      }
-
-      this._mprisService.disconnect(signalId);
-    }
-
-    this._signalIds = [];
-
-    if (this._sessionSignalId) {
-      Main.sessionMode.disconnect(this._sessionSignalId);
-    }
-
     this._zyrotecDashComponent?.destroy();
     this._mprisService?.destroy();
     this._zyrotecMediaControls?.destroy();

@@ -1,8 +1,7 @@
 import Gio from 'gi://Gio';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import GLib from 'gi://GLib';
-
-import { DominantColorRGB } from "../../types/dominant-color/dominant-color-rgb.type.js";
+import { RGB } from "../../types/color/rgb.type.js";
 
 export class DominantColorService {
     constructor() { }
@@ -43,7 +42,7 @@ export class DominantColorService {
         });
     }
 
-    public async getDominantColorFromImage(imageUrl: string, sampleStep: number = 8): Promise<DominantColorRGB | null> {
+    public async getDominantColorFromImage(imageUrl: string, sampleStep: number = 8): Promise<RGB | null> {
         try {
             const imageFile = Gio.File.new_for_uri(imageUrl);
 
