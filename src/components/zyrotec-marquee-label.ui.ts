@@ -195,7 +195,7 @@ export class ZyrotecMarqueeLabel {
     }
 
     private _setFadeOutEffect(): void {
-        const fadeWidth = this._labelOne.get_theme_node().get_font().get_size() / Pango.SCALE;
+        const fadeWidth = (this._labelOne.get_theme_node().get_font().get_size() / Pango.SCALE) + 4;
         const fadeOutEffect = new FadeEffectBase() as FadeEffectBase;
         fadeOutEffect.setFadePixels(fadeWidth);
         this._marqueeWidget.clear_effects();
