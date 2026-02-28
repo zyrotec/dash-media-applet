@@ -2,6 +2,7 @@ import St from 'gi://St';
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
+import { FadeEffectBase } from '../effects/fade.effect.js';
 
 export class ZyrotecMarqueeLabel {
     private _marqueeWidget!: St.Widget;
@@ -126,17 +127,17 @@ export class ZyrotecMarqueeLabel {
         if (labelWidth > widgetWidth) {
             this._labelTwo.visible = true;
             this._labelSpacer.visible = true;
-            // For marquee: labelOne must not expand, so the box scrolls naturally
             this._labelOne.set_x_expand(false);
             this._labelOne.set_x_align(Clutter.ActorAlign.START);
+            this._setFadeOutEffect();
             this._startMarqueeAnimation();
         } else {
             this._labelTwo.visible = false;
             this._labelSpacer.visible = false;
-            this._stopMarqueeAnimation();
-            // Restore expand so alignment works
             this._labelOne.set_x_expand(true);
+            this._clearFadeOutEffect();
             this._applyStaticAlignment();
+            this._stopMarqueeAnimation();
         }
     }
 
@@ -191,6 +192,18 @@ export class ZyrotecMarqueeLabel {
             mode: Clutter.AnimationMode.LINEAR,
             repeatCount: -1,
         });
+    }
+
+    private _setFadeOutEffect(): void {
+        const fadeWidth = (this._labelOne.get_theme_node().get_font().get_size() / Pango.SCALE) + 4;
+        const fadeOutEffect = new FadeEffectBase() as FadeEffectBase;
+        fadeOutEffect.setFadePixels(fadeWidth);
+        this._marqueeWidget.clear_effects();
+        this._marqueeWidget.add_effect(fadeOutEffect);
+    }
+
+    private _clearFadeOutEffect(): void {
+        this._marqueeWidget.clear_effects();
     }
 
     public setText(value: string): void {
