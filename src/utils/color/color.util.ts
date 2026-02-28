@@ -1,7 +1,7 @@
 import { HSL } from "../../types/color/hsl.type";
 import { RGB } from "../../types/color/rgb.type";
 
-export class ColorService {
+export class ColorUtil{
     public getLuminanceColor(
         color: RGB,
         luminanceThreshold: number = 0.5,

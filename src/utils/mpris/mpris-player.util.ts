@@ -2,7 +2,7 @@ import Gio from "gi://Gio";
 import GLib from "gi://GLib";
 import { Environment } from "../../environment/environment.js";
 
-export class MprisPlayerService {
+export class MprisPlayerUtil {
     private _mprisBusName!: string;
     private _mprisPlayerProxy!: Gio.DBusProxy;
     private _mprisLastActivityTime!: number;
@@ -14,7 +14,7 @@ export class MprisPlayerService {
         this.setMprisLastActivityTime(Date.now());
     }
 
-    public connectSignals(callback: (player: MprisPlayerService, changed: GLib.Variant) => void): void {
+    public connectSignals(callback: (player: MprisPlayerUtil, changed: GLib.Variant) => void): void {
         this._propertiesChangedId = this._mprisPlayerProxy.connect(
             Environment.G_PROPERTIES_CHANGED,
             (_proxy: Gio.DBusProxy, changed: GLib.Variant) => {

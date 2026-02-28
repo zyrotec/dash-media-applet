@@ -3,7 +3,7 @@ import GdkPixbuf from 'gi://GdkPixbuf';
 import GLib from 'gi://GLib';
 import { RGB } from "../../types/color/rgb.type.js";
 
-export class DominantColorService {
+export class DominantColorUtil {
     constructor() { }
 
     private async _getFileStream(file: Gio.File): Promise<Gio.InputStream | null> {

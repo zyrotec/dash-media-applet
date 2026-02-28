@@ -4,7 +4,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import { CavaCallback } from '../../types/cava/cava-callback.type.js';
 
-export class CavaService {
+export class CavaUtil {
     private _cavaProcess?: Gio.Subprocess;
     private _cavaStdout?: Gio.DataInputStream;
     private _callbacks: Set<CavaCallback> = new Set();
