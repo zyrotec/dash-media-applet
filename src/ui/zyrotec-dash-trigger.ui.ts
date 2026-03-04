@@ -12,12 +12,14 @@ import { ZyrotecMediaControls } from "./zyrotec-media-controls.ui.js";
 import { ColorUtil } from "../utils/color/color.util.js";
 import { MprisMetadata } from "../types/mpris/mpris-metadata.type.js";
 import { MPRIS_CHANGED_SIGNALS } from "../enums/mpris/mpris-changed-signals.enum.js";
+import { DashToDockUtil } from "../utils/dash-to-dock/dash-to-dock.util.js";
 
 class ZyrotecDashTriggerBase extends St.BoxLayout {
     private _mprisUtil?: MprisUtil;
     private _cavaUtil?: CavaUtil;
     private _dominantColorUtil?: DominantColorUtil;
     private _colorUtil?: ColorUtil;
+    private _dashToDockUtil?: DashToDockUtil;
 
     private _zyrotecDashComponent?: ZyrotecDashComponent;
     private _zyrotecMediaControls?: ZyrotecMediaControls;
@@ -46,6 +48,7 @@ class ZyrotecDashTriggerBase extends St.BoxLayout {
         this._cavaUtil = new CavaUtil(this._setCavaConfig());
         this._dominantColorUtil = new DominantColorUtil();
         this._colorUtil = new ColorUtil();
+        this._dashToDockUtil = new DashToDockUtil();
 
         this._cavaUtil.cavaStart();
 
@@ -91,6 +94,8 @@ class ZyrotecDashTriggerBase extends St.BoxLayout {
         });
     }
 
+    private _ownsMenuManager: boolean = false;
+
     private _generatePopup(): void {
         if (!this._mprisUtil) {
             return;
@@ -101,6 +106,8 @@ class ZyrotecDashTriggerBase extends St.BoxLayout {
             0.5,
             St.Side.TOP
         );
+
+        (this._mediaPopupMenu as any).blockSourceEvents = true;
 
         this._zyrotecMediaControls = new ZyrotecMediaControls(
             this._mprisUtil
@@ -136,6 +143,8 @@ class ZyrotecDashTriggerBase extends St.BoxLayout {
             try {
                 this._handleSessionSync();
             } catch (error) { }
+
+            return false;
         });
         this._handleSignalsIds(connectedSignal);
 
@@ -147,6 +156,8 @@ class ZyrotecDashTriggerBase extends St.BoxLayout {
             try {
                 this._handleSessionSync();
             } catch (error) { }
+
+            return false;
         });
         this._handleSignalsIds(disconnectedSignal);
 
@@ -160,6 +171,8 @@ class ZyrotecDashTriggerBase extends St.BoxLayout {
 
                 this._zyrotecMediaControls?.setPositionState(args, metadata);
             } catch (error) { }
+
+            return false;
         });
         this._signalIds.push(positionSignal);
 
@@ -171,6 +184,8 @@ class ZyrotecDashTriggerBase extends St.BoxLayout {
             try {
                 this._zyrotecMediaControls?.setPlayState(args);
             } catch (error) { }
+
+            return false;
         });
         this._handleSignalsIds(playbackStatusSignal);
 
@@ -182,6 +197,8 @@ class ZyrotecDashTriggerBase extends St.BoxLayout {
             try {
                 this._zyrotecMediaControls?.setShuffleState(args);
             } catch (error) { }
+
+            return false;
         });
         this._handleSignalsIds(shuffleSignal);
 
@@ -193,16 +210,20 @@ class ZyrotecDashTriggerBase extends St.BoxLayout {
             try {
                 this._zyrotecMediaControls?.setRepeatState(args);
             } catch (error) { }
+
+            return false;
         });
         this._handleSignalsIds(loopStatusSignal);
 
-        const metadataSignal = this._mprisUtil.connect(MPRIS_CHANGED_SIGNALS.metadataChanged, (service, args: MprisMetadata) => {
+        const metadataSignal = this._mprisUtil.connect(MPRIS_CHANGED_SIGNALS.metadataChanged, (service, args) => {
             if (this._destroyed) return;
 
             try {
                 this._zyrotecMediaControls?.setDefaultPositionState(args);
                 this._updateMetadata(args);
             } catch (error) { }
+
+            return false;
         });
         this._handleSignalsIds(metadataSignal);
     }
@@ -213,6 +234,7 @@ class ZyrotecDashTriggerBase extends St.BoxLayout {
         }
 
         const clickedSignal = this._mediaDashTriggerButton.connect('clicked', () => {
+            this._mediaDashTriggerButton.set_hover(true);
             this._mediaPopupMenu?.toggle();
         });
 
@@ -220,7 +242,19 @@ class ZyrotecDashTriggerBase extends St.BoxLayout {
     }
 
     private _handelPopupSignals(): void {
+        if (!this._mediaPopupMenu) {
+            return;
+        }
 
+        const popupStateChangedSignal = this._mediaPopupMenu.connect("open-state-changed", (menu, args) => {
+            if (args) {
+                this._dashToDockUtil?.pinDock();
+            } else {
+                this._dashToDockUtil?.unpinDock();
+            }
+            return false;
+        });
+        this._handlePopupSignalIds(popupStateChangedSignal, this._mediaPopupMenu);
     }
 
     private _handleSignalsIds(signalId: number): void {
@@ -427,6 +461,7 @@ class ZyrotecDashTriggerBase extends St.BoxLayout {
         }
 
         this._mprisUtil?.destroy();
+        this._dashToDockUtil?.destroy();
         this._zyrotecDashComponent?.destroy();
         this._zyrotecMediaControls?.destroy();
 
@@ -434,6 +469,7 @@ class ZyrotecDashTriggerBase extends St.BoxLayout {
         this._mprisUtil = undefined;
         this._zyrotecMediaControls = undefined;
 
+        this._separator.destroy();
         this._mediaDashTriggerButton.destroy();
 
         if (this._mediaPopupMenu) {
